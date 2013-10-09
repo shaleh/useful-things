@@ -1,3 +1,14 @@
 #!/bin/sh
 
-emacsclient --alternate-editor="" "$@"
+case `uname -s` in
+    Darwin)
+        exec /Applications/Emacs.app/Contents/MacOS/bin/emacsclient --alternate-editor="" "$@"
+        ;;
+    Linux)
+        emacsclient --alternate-editor="" "$@"
+        ;;
+    *)
+        echo "Unknown platform, exiting!!"
+        exit 1
+        ;;
+esac
