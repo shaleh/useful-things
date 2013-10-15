@@ -1,0 +1,158 @@
+#!/usr/bin/env python
+
+####################################################################################
+# Copyright (c) 2013, Sean Perry <shaleh@speakeasy.net>
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without modification,
+# are permitted provided that the following conditions are met:
+#
+# Redistributions of source code must retain the above copyright notice, this
+# list of conditions and the following disclaimer.
+#
+# Redistributions in binary form must reproduce the above copyright notice, this
+# list of conditions and the following disclaimer in the documentation and/or
+# other materials provided with the distribution.
+#
+# Neither the name of the {organization} nor the names of its
+# contributors may be used to endorse or promote products derived from
+# this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+# ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+# (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+#  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+# ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+# SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+####################################################################################
+
+
+import argparse
+import datetime
+import os
+import os.path
+import pyexiv2
+
+
+class ExifHandler(object):
+    verbose = False
+
+    def __init__(self,  **kwargs):
+        for kw in kwargs:
+            setattr(self, kw, kwargs[kw])
+
+    def __call__(self, filename):
+        if self.verbose:
+            print filename
+
+        metadata = pyexiv2.ImageMetadata(filename)
+
+        try:
+            metadata.read()
+        except IOError:
+            if self.verbose:
+                print "No metadata skipping."
+            return None
+
+        if 'Exif.Photo.DateTimeOriginal' in metadata:
+            return metadata['Exif.Photo.DateTimeOriginal'].value
+        elif 'Exif.Image.DateTimeOriginal' in metadata:
+            return metadata['Exif.Image.DateTimeOriginal'].value
+
+        return None
+
+
+class StatHandler(object):
+    verbose = False
+
+    def __init__(self,  **kwargs):
+        for kw in kwargs:
+            setattr(self, kw, kwargs[kw])
+
+    def __call__(self, filename):
+        if self.verbose:
+            print filename
+
+        st = os.stat(filename)
+        return datetime.datetime.fromtimestamp(st.st_ctime)
+
+
+class LinkConstructor(object):
+    dry_run = False
+    file_handler = None
+    use_stat = False
+    verbose = False
+
+    def __init__(self, **kwargs):
+        for kw in kwargs:
+            setattr(self, kw, kwargs[kw])
+        self.stat_handler = StatHandler(verbose=self.verbose)
+
+    def __call__(self, arg, dirname, fnames):
+        for filename in filter(os.path.isfile, [ os.path.join(dirname, fn) for fn in fnames ]):
+            self.action(filename, arg)
+
+    def action(self, filename, destination):
+        data = self.file_handler(filename)
+        if data is None:
+            if self.use_stat:
+                data = self.stat_handler(filename)
+        self.make_link(filename, data, destination)
+
+    def make_link(self, filename, data, destdir):
+        if data is None:
+            path = os.path.join(destdir, "unknown")
+        else:
+            path = os.path.join(destdir, str(data.year), str(data.month), str(data.day))
+
+        basename = os.path.basename(filename)
+
+        final_filename = os.path.join(path, basename)
+
+        if os.path.islink(final_filename):
+            if self.verbose:
+                print "{}: link exists".format(final_filename)
+            return
+        elif os.path.exists(final_filename):
+            print "{} exists, please investigate.".format(final_filename)
+            raise SystemExit(1)
+
+        if not os.path.isdir(path):
+            if self.dry_run:
+                print "Making", path
+            else:
+                os.makedirs(path)
+
+        common = os.path.commonprefix((filename, final_filename))
+        if common and common != '/':  # there is a reasonable common path
+            # Using a relative path makes the links "prettier" when listed.
+            filename = os.path.relpath(filename, os.path.dirname(final_filename))
+
+        if self.verbose:
+            print "{} -> {}".format(filename, final_filename)
+
+        if not self.dry_run:
+            os.symlink(filename, final_filename)
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Make link farm from exif info")
+
+    parser.add_argument('--dry-run', action='store_true', help='Dry run, just print actions.')
+    parser.add_argument('--use-stat', action='store_true', help='Use stat if no metadata')
+    parser.add_argument('--verbose', action='store_true', help='Verbose output')
+    parser.add_argument('source', help="Source directory")
+    parser.add_argument('destination', help="Output Directory")
+
+    args = parser.parse_args()
+    if args.dry_run:
+        args.verbose = True  # makes no sense otherwise
+
+    # for now ExifHandler is all there is. May add other handlers later.
+    walker = LinkConstructor(file_handler=ExifHandler(verbose=args.verbose),
+                             dry_run=args.dry_run, use_stat=args.use_stat, verbose=args.verbose)
+    os.path.walk(os.path.realpath(args.source), walker, os.path.realpath(args.destination))
