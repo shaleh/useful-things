@@ -146,7 +146,7 @@ def add_dot(s):
 
 
 def extensions_handler(input):
-    if ',' in input or input[0].isalpha():
+    if ',' in input or input[0] == '.' or input[0].isalpha():
         return [ add_dot(s.strip()) for s in input.split(',') ]
 
     raise argparse.ArgumentTypeError("{} is not a valid extensions list.".format(input))
