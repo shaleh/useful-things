@@ -1,4 +1,4 @@
-PYTHON_UNITTESTS = archiver link_farm new_password
+PYTHON_UNITTESTS = archiver hasher link_farm new_password
 
 unittest: python_unittests
 
@@ -6,7 +6,8 @@ python_unittests:
 	for i in $(PYTHON_UNITTESTS); do \
 		test -L $$i.py || ln -s $$i $$i.py; \
 	done
-	nosetests
+
+	nosetests -x -s --with-coverage --cover-package="$(shell echo $(PYTHON_UNITTESTS) | sed -e 's/ /,/g')"
 
 clean:
 	rm -f *~ *.pyc
