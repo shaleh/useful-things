@@ -1,0 +1,4 @@
+#!/bin/sh
+
+# needs debsums package
+find /etc -type f | grep -vFf <(debsums -e | sed 's/[[:space:]]*OK$//')
