@@ -1,0 +1,16 @@
+#!/bin/bash
+
+lockscr() {
+  if [ "$(defaults read com.apple.screensaver askForPasswordDelay 2>/dev/null)" ]; then
+    local Olddelay="$(defaults read com.apple.screensaver askForPasswordDelay)"
+    defaults write com.apple.screensaver askForPasswordDelay -int 0 && \
+        pmset displaysleepnow
+    defaults write com.apple.screensaver askForPasswordDelay -int "${Olddelay}"
+  else
+    defaults write com.apple.screensaver askForPasswordDelay -int 0 && \
+        pmset displaysleepnow
+    defaults delete com.apple.screensaver askForPasswordDelay
+  fi;
+}
+
+lockscr
