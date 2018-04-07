@@ -1,0 +1,10 @@
+#!/bin/sh
+
+directory=~/Pictures/screenshots
+
+[ -d "$directory" ] || mkdir -p "$directory"
+
+filename=ScreenShot_`date '+%Y-%m-%d_%H-%M-%S'`.jpg
+
+screencapture -d -o -i $directory/$filename
+open --reveal $directory/$filename
