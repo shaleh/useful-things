@@ -38,50 +38,50 @@ import os.path
 import pyexiv2
 
 
-class ExifHandler(object):
+class ExifHandler:
     verbose = False
 
-    def __init__(self,  **kwargs):
+    def __init__(self, **kwargs):
         for kw in kwargs:
             setattr(self, kw, kwargs[kw])
 
     def __call__(self, filename):
         if self.verbose:
-            print filename
+            print(filename)
 
         metadata = pyexiv2.ImageMetadata(filename)
 
         try:
             metadata.read()
-        except IOError:
+        except OSError:
             if self.verbose:
-                print "No metadata skipping."
+                print("No metadata skipping.")
             return None
 
-        if 'Exif.Photo.DateTimeOriginal' in metadata:
-            return metadata['Exif.Photo.DateTimeOriginal'].value
-        elif 'Exif.Image.DateTimeOriginal' in metadata:
-            return metadata['Exif.Image.DateTimeOriginal'].value
+        if "Exif.Photo.DateTimeOriginal" in metadata:
+            return metadata["Exif.Photo.DateTimeOriginal"].value
+        elif "Exif.Image.DateTimeOriginal" in metadata:
+            return metadata["Exif.Image.DateTimeOriginal"].value
 
         return None
 
 
-class StatHandler(object):
+class StatHandler:
     verbose = False
 
-    def __init__(self,  **kwargs):
+    def __init__(self, **kwargs):
         for kw in kwargs:
             setattr(self, kw, kwargs[kw])
 
     def __call__(self, filename):
         if self.verbose:
-            print filename
+            print(filename)
 
         st = os.stat(filename)
         return datetime.datetime.fromtimestamp(st.st_ctime)
 
 
-class LinkConstructor(object):
+class LinkConstructor:
     dry_run = False
     file_handler = None
     use_stat = False
@@ -93,7 +93,9 @@ class LinkConstructor(object):
         self.stat_handler = StatHandler(verbose=self.verbose)
 
     def __call__(self, arg, dirname, fnames):
-        for filename in filter(os.path.isfile, [ os.path.join(dirname, fn) for fn in fnames ]):
+        for filename in filter(
+            os.path.isfile, [os.path.join(dirname, fn) for fn in fnames]
+        ):
             self.action(filename, arg)
 
     def action(self, filename, destination):
@@ -115,44 +117,54 @@ class LinkConstructor(object):
 
         if os.path.islink(final_filename):
             if self.verbose:
-                print "{}: link exists".format(final_filename)
+                print(f"{final_filename}: link exists")
             return
         elif os.path.exists(final_filename):
-            print "{} exists, please investigate.".format(final_filename)
+            print(f"{final_filename} exists, please investigate.")
             raise SystemExit(1)
 
         if not os.path.isdir(path):
             if self.dry_run:
-                print "Making", path
+                print("Making", path)
             else:
                 os.makedirs(path)
 
         common = os.path.commonprefix((filename, final_filename))
-        if common and common != '/':  # there is a reasonable common path
+        if common and common != "/":  # there is a reasonable common path
             # Using a relative path makes the links "prettier" when listed.
             filename = os.path.relpath(filename, os.path.dirname(final_filename))
 
         if self.verbose:
-            print "{} -> {}".format(filename, final_filename)
+            print(f"{filename} -> {final_filename}")
 
         if not self.dry_run:
             os.symlink(filename, final_filename)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Make link farm from exif info")
 
-    parser.add_argument('--dry-run', action='store_true', help='Dry run, just print actions.')
-    parser.add_argument('--use-stat', action='store_true', help='Use stat if no metadata')
-    parser.add_argument('--verbose', action='store_true', help='Verbose output')
-    parser.add_argument('source', help="Source directory")
-    parser.add_argument('destination', help="Output Directory")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Dry run, just print actions."
+    )
+    parser.add_argument(
+        "--use-stat", action="store_true", help="Use stat if no metadata"
+    )
+    parser.add_argument("--verbose", action="store_true", help="Verbose output")
+    parser.add_argument("source", help="Source directory")
+    parser.add_argument("destination", help="Output Directory")
 
     args = parser.parse_args()
     if args.dry_run:
         args.verbose = True  # makes no sense otherwise
 
     # for now ExifHandler is all there is. May add other handlers later.
-    walker = LinkConstructor(file_handler=ExifHandler(verbose=args.verbose),
-                             dry_run=args.dry_run, use_stat=args.use_stat, verbose=args.verbose)
-    os.path.walk(os.path.realpath(args.source), walker, os.path.realpath(args.destination))
+    walker = LinkConstructor(
+        file_handler=ExifHandler(verbose=args.verbose),
+        dry_run=args.dry_run,
+        use_stat=args.use_stat,
+        verbose=args.verbose,
+    )
+    os.path.walk(
+        os.path.realpath(args.source), walker, os.path.realpath(args.destination)
+    )

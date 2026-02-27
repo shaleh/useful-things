@@ -8,31 +8,31 @@ import sys
 
 def is_windows():
     """Returns ``True`` if run on Windows."""
-    return sys.platform.startswith('win')
+    return sys.platform.startswith("win")
 
 
 class PlatformAppropriateParser(argparse.ArgumentParser):
     """Simple wrapper around ``ArgumentParser`` to use the platform
-appropriate style command line arguments."""
+    appropriate style command line arguments."""
 
-    hyphen_re = re.compile(r'^-+')
+    hyphen_re = re.compile(r"^-+")
 
     def __init__(self, *args, **kwargs):
-        if 'prefix_chars' not in kwargs and is_windows():
-            kwargs['prefix_chars'] = '/'
-        super(PlatformAppropriateParser, self).__init__(*args, **kwargs)
+        if "prefix_chars" not in kwargs and is_windows():
+            kwargs["prefix_chars"] = "/"
+        super().__init__(*args, **kwargs)
 
     def add_argument(self, *args, **kwargs):
         if is_windows():
             tmp_args = list(args)
             # the first N args could all be command line arguments
             for i in range(len(tmp_args)):
-                if tmp_args[i].startswith('-'):
-                    tmp_args[i] = self.hyphen_re.sub('/', tmp_args[i])
+                if tmp_args[i].startswith("-"):
+                    tmp_args[i] = self.hyphen_re.sub("/", tmp_args[i])
                 else:
                     break
             args = tmp_args
-        return super(PlatformAppropriateParser, self).add_argument(*args, **kwargs)
+        return super().add_argument(*args, **kwargs)
 
 
 def gen_hash(hash_type, data):
@@ -40,26 +40,31 @@ def gen_hash(hash_type, data):
     return hash
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = PlatformAppropriateParser(description="Hash given file(s)")
 
-    parser.add_argument('-t', '--type', dest="hash_type",
-                        choices=hashlib.algorithms,
-                        default=hashlib.algorithms[0])
-    parser.add_argument('-v', '--verbose', dest="verbose",
-                        action="store_true", default=False)
-    parser.add_argument('filenames', nargs="+")
+    parser.add_argument(
+        "-t",
+        "--type",
+        dest="hash_type",
+        choices=hashlib.algorithms,
+        default=hashlib.algorithms[0],
+    )
+    parser.add_argument(
+        "-v", "--verbose", dest="verbose", action="store_true", default=False
+    )
+    parser.add_argument("filenames", nargs="+")
 
     args = parser.parse_args()
 
     if args.verbose:
-        print "Using:", args.hash_type
+        print("Using:", args.hash_type)
 
     for f in args.filenames:
         try:
             with open(f) as fp:
                 hash = gen_hash(args.hash_type, fp.read())
-                print f, hash.hexdigest()
-        except IOError, e:
-            sys.stderr.write("Failure: {}\n".format(e))
+                print(f, hash.hexdigest())
+        except OSError as e:
+            sys.stderr.write(f"Failure: {e}\n")
             raise SystemExit(1)

@@ -1,0 +1,82 @@
+#!/bin/sh
+
+###
+# Simple script to load Github and view a file.
+###
+
+REPO_PATH="$HOME/repos"
+BRANCH="${BRANCH:-main}"
+
+make_absolute() {
+    filename=$1
+
+    # Step 1. Ensure the filename is absolute. This ensures that even when called from
+    # deep in the tree the paths work.
+    case "$filename" in
+        /*)
+            # Absolute already, do nothing.
+            echo "$filename"
+            ;;
+        *)
+            echo "$PWD/$filename"
+            ;;
+    esac
+}
+
+strip_local_repo_path() {
+    filename=$1
+    for base in 'work' 'personal' 'opensource'; do
+        # Now, a fancy pattern replace to strip off the absolute prefix.
+        stripped="${filename#"${REPO_PATH}/${base}/"}"
+        case "$stripped" in
+            /*)
+                # Still has leading slash. This prefix did not match.
+                ;;
+            *)
+                # Clean, return it.
+                echo "$stripped"
+                return
+                ;;
+        esac
+    done
+
+    echo "No prefixes matched. Fail!" >/dev/stderr
+    exit 1
+}
+
+# These are optional. Will simply load the source tree if left out.
+filename=$1
+linenumber=$2
+
+if [ -z "$filename" ]; then
+    BASE_URL="$(git remote get-url origin)"
+    if [ -z "$URL" ]; then
+        echo "Don't know what Github URL to load. Move into a git repo with an origin defined." >/dev/stderr
+        exit 1
+    fi
+    URL="${BASE_URL}/tree/${BRANCH}/"
+else
+    filename=$(make_absolute "$filename")
+    BASE_URL="$(cd "$(dirname "$filename")" && git remote get-url origin)"
+    filename=$(strip_local_repo_path "$filename")
+    # Now pop off the next directory. This should be the repo name but this clone could have been renamed.
+    filename="${filename#*/}"
+
+    URL="${BASE_URL}/blob/${BRANCH}/${filename}"
+
+    if [ ! -z "$linenumber" ]; then
+        URL="${URL}#L${linenumber}"
+    fi
+fi
+
+echo "$URL"
+
+case "$(uname -s)" in
+    Darwin)
+        CMD="open"
+        ;;
+    *)
+        CMD="xdg-open"
+        ;;
+esac
+$CMD "$URL"

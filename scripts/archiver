@@ -38,9 +38,10 @@ import os
 import os.path
 import shutil
 import sys
+from functools import reduce
 
 
-class Archiver(object):
+class Archiver:
     archived_files = []
     extensions = []
     verbose = False
@@ -51,11 +52,11 @@ class Archiver(object):
 
     def __call__(self, arg, dirname, fnames):
         if self.verbose:
-            print dirname
+            print(dirname)
 
-        for f in filter(os.path.isfile, [ os.path.join(dirname, fn) for fn in fnames ]):
+        for f in filter(os.path.isfile, [os.path.join(dirname, fn) for fn in fnames]):
             if self.verbose:
-                print f
+                print(f)
 
             if self.extensions:
                 basename, ext = os.path.splitext(f)
@@ -79,7 +80,7 @@ def chunk_string(s, chunk_size):
         raise ValueError("chunk size and input do not match")
 
     # if there would be N chunks, return N-1 of them
-    return [ s[i:(i + chunk_size)] for i in range(0, s_len - chunk_size, chunk_size) ]
+    return [s[i : (i + chunk_size)] for i in range(0, s_len - chunk_size, chunk_size)]
 
 
 class HashArchiver(Archiver):
@@ -87,19 +88,37 @@ class HashArchiver(Archiver):
     potential_conflicts = []
 
     def __init__(self, **kwargs):
-        super(HashArchiver, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
     def archive(self, filename, destination_root):
         digest = self.hasher(filename)
-        chunks = chunk_string(digest, 4) if digest else ['', ]
-        self.archive_file(filename, digest, [destination_root, ] + chunks, digest)
+        chunks = (
+            chunk_string(digest, 4)
+            if digest
+            else [
+                "",
+            ]
+        )
+        self.archive_file(
+            filename,
+            digest,
+            [
+                destination_root,
+            ]
+            + chunks,
+            digest,
+        )
 
     def archive_file(self, source_filename, digest, dest_path, dest_filename):
         if digest in self.archived_files:
-            if os.path.basename(self.archived_files[digest][0]) == os.path.basename(source_filename):
+            if os.path.basename(self.archived_files[digest][0]) == os.path.basename(
+                source_filename
+            ):
                 self.archived_files[digest][2].append(source_filename)
             else:
-                self.potential_conflicts.append((self.archived_files[digest][0], source_filename))
+                self.potential_conflicts.append(
+                    (self.archived_files[digest][0], source_filename)
+                )
 
             return
 
@@ -112,7 +131,7 @@ class HashArchiver(Archiver):
 
         if not self.dry_run:
             if os.path.exists(final_filename):
-                print "{} already exists, skipping".format(final_filename)
+                print(f"{final_filename} already exists, skipping")
                 return
 
             if not os.path.isdir(dest):
@@ -125,7 +144,7 @@ class HashArchiver(Archiver):
     def hasher(self, filename):
         try:
             with open(filename) as fp:
-                h = hashlib.new('sha1', fp.read())
+                h = hashlib.new("sha1", fp.read())
             return h.hexdigest()
         except:
             pass  # should do something here, maybe keep a list of failures and causes?
@@ -135,37 +154,55 @@ class HashArchiver(Archiver):
 Potential conflicts:
 {}
 
-Total processed: {}""".format("\n".join("{} & {}".format(*fs) for fs in self.potential_conflicts),
-                              reduce(operator.add, [ len(files) + 1 for _, _, files in self.archived_files.values() ]))
+Total processed: {}""".format(
+            "\n".join("{} & {}".format(*fs) for fs in self.potential_conflicts),
+            reduce(
+                operator.add,
+                [len(files) + 1 for _, _, files in list(self.archived_files.values())],
+            ),
+        )
 
 
 def add_dot(s):
-    if s[0] == '.':
+    if s[0] == ".":
         return s
-    return '.' + s
+    return "." + s
 
 
 def extensions_handler(input):
-    if ',' in input or input[0] == '.' or input[0].isalpha():
-        return [ add_dot(s.strip()) for s in input.split(',') ]
+    if "," in input or input[0] == "." or input[0].isalpha():
+        return [add_dot(s.strip()) for s in input.split(",")]
 
-    raise argparse.ArgumentTypeError("{} is not a valid extensions list.".format(input))
+    raise argparse.ArgumentTypeError(f"{input} is not a valid extensions list.")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import inspect
 
-    known_archivers = { name: cls for name, cls in inspect.getmembers(sys.modules[__name__], inspect.isclass) \
-                        if name.endswith('Archiver') }
+    known_archivers = {
+        name: cls
+        for name, cls in inspect.getmembers(sys.modules[__name__], inspect.isclass)
+        if name.endswith("Archiver")
+    }
 
-    parser = argparse.ArgumentParser(description='Archive files by file hash.')
-    parser.add_argument('--archiver', choices=known_archivers.keys(), default='Archiver',
-                        help='Archiver type to use.')
-    parser.add_argument('--dry-run', action='store_true', help='Dry run, just print actions.')
-    parser.add_argument('--extensions', type=extensions_handler, help='Extensions to archive, comma separated.')
-    parser.add_argument('--verbose', action='store_true', help='Verbose output')
-    parser.add_argument('source', help='source path')
-    parser.add_argument('destination', help='destination path')
+    parser = argparse.ArgumentParser(description="Archive files by file hash.")
+    parser.add_argument(
+        "--archiver",
+        choices=list(known_archivers.keys()),
+        default="Archiver",
+        help="Archiver type to use.",
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Dry run, just print actions."
+    )
+    parser.add_argument(
+        "--extensions",
+        type=extensions_handler,
+        help="Extensions to archive, comma separated.",
+    )
+    parser.add_argument("--verbose", action="store_true", help="Verbose output")
+    parser.add_argument("source", help="source path")
+    parser.add_argument("destination", help="destination path")
 
     args = parser.parse_args()
     if args.dry_run:
@@ -173,6 +210,8 @@ if __name__ == '__main__':
 
     archiver_type = known_archivers[args.archiver]
 
-    archiver = archiver_type(dry_run=args.dry_run, extensions=args.extensions, verbose=args.verbose)
+    archiver = archiver_type(
+        dry_run=args.dry_run, extensions=args.extensions, verbose=args.verbose
+    )
     os.path.walk(args.source, archiver, args.destination)
-    print archiver.statistics()
+    print(archiver.statistics())
